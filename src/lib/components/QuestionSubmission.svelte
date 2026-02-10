@@ -8,9 +8,10 @@
   let correctIndex = 0;
   let showForm = false;
   
+  let timerEndsAt = Date.now() + (game.timerDuration * 1000);
   $: myTeam = game.teams[currentPlayer.teamId];
   $: myProposals = game.questionProposals[currentPlayer.teamId] || [];
-  $: timeRemaining = Math.max(0, Math.floor((game.timerEndsAt - Date.now()) / 1000));
+  $: timeRemaining = Math.max(0, Math.floor((timerEndsAt - Date.now()) / 1000));
   $: minutes = Math.floor(timeRemaining / 60);
   $: seconds = timeRemaining % 60;
   $: mySkipVote = game.skipVotes?.teams[currentPlayer.teamId];
@@ -21,7 +22,7 @@
   $: if (game.status === 'submitting_questions') {
     if (interval) clearInterval(interval);
     interval = setInterval(() => {
-      timeRemaining = Math.max(0, Math.floor((game.timerEndsAt - Date.now()) / 1000));
+      timeRemaining = Math.max(0, Math.floor((timerEndsAt - Date.now()) / 1000));
     }, 1000);
   }
   

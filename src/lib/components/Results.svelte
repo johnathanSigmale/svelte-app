@@ -155,14 +155,36 @@
         </div>
         
         <div class="scoring-info">
+          <h4>Difficulty Analysis</h4>
+          <div class="difficulty-stats">
+            <div class="stat">
+              <strong>Correct answers:</strong> 
+              {selectedQuestion.correctCount} / {selectedQuestion.totalAnswering} 
+              ({Math.round(selectedQuestion.correctPercentage * 100)}%)
+            </div>
+            <div class="stat">
+              <strong>Difficulty rating:</strong>
+              {#if selectedQuestion.correctPercentage >= 0.33 && selectedQuestion.correctPercentage <= 0.66}
+                <span class="difficulty-good">✓ Well-balanced</span>
+              {:else if selectedQuestion.correctPercentage < 0.33}
+                <span class="difficulty-bad">Too easy</span>
+              {:else}
+                <span class="difficulty-bad">Too hard</span>
+              {/if}
+            </div>
+          </div>
+          
           <h4>Points Awarded</h4>
           <div class="scoring-breakdown">
             <div class="score-item">
               <strong>{fromTeam.name}:</strong>
-              {#if selectedQuestion.anyoneAnswered}
-                +{game.config.scoring.questionAnswered} (question answered)
+              {selectedQuestion.questionPoints > 0 ? '+' : ''}{selectedQuestion.questionPoints} points
+              {#if selectedQuestion.correctPercentage >= 0.33 && selectedQuestion.correctPercentage <= 0.66}
+                (balanced difficulty)
+              {:else if selectedQuestion.correctPercentage < 0.33}
+                (too easy)
               {:else}
-                {game.config.scoring.questionUnanswered} (question unanswered)
+                (too hard)
               {/if}
             </div>
             {#each Object.entries(selectedQuestion.teamAnswers) as [teamId, answer]}
@@ -592,4 +614,25 @@
     color: #666;
     font-size: 0.95rem;
   }
+
+  .difficulty-stats {
+  background: #f9f9f9;
+  padding: 1rem;
+  border-radius: 6px;
+  margin-bottom: 1.5rem;
+}
+
+.stat {
+  margin: 0.5rem 0;
+}
+
+.difficulty-good {
+  color: #28a745;
+  font-weight: 600;
+}
+
+.difficulty-bad {
+  color: #dc3545;
+  font-weight: 600;
+}
 </style>

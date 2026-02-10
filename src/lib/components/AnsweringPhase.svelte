@@ -2,9 +2,16 @@
   export let game;
   export let currentPlayer;
   export let sendAction;
+  let turn = 0
   
+  let timerEndsAt = Date.now() + (game.currentTurn.timerDuration * 1000);
+  
+  $: if (turn != game.currentTurn.number) {
+    timerEndsAt = Date.now() + (game.currentTurn.timerDuration * 1000);
+    turn = game.currentTurn.number;
+  }
   $: myTeam = game.teams[currentPlayer.teamId];
-  $: timeRemaining = Math.max(0, Math.floor((game.currentTurn.timerEndsAt - Date.now()) / 1000));
+  $: timeRemaining = Math.max(0, Math.floor((timerEndsAt - Date.now()) / 1000));
   $: minutes = Math.floor(timeRemaining / 60);
   $: seconds = timeRemaining % 60;
   $: mySkipVote = game.skipVotes?.teams[currentPlayer.teamId];
@@ -23,7 +30,7 @@
   $: if (game.status === 'answering_turn') {
     if (interval) clearInterval(interval);
     interval = setInterval(() => {
-      timeRemaining = Math.max(0, Math.floor((game.currentTurn.timerEndsAt - Date.now()) / 1000));
+      timeRemaining = Math.max(0, Math.floor((timerEndsAt - Date.now()) / 1000));
     }, 1000);
   }
   

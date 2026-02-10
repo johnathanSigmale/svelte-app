@@ -31,6 +31,8 @@ export function startGame(gameId, playerId) {
   });
   
   game.status = 'submitting_questions';
+  game.timerStartedAt = Date.now(); // Add this
+  game.timerDuration = game.config.questionSubmitTimer; // Add this
   game.timerEndsAt = Date.now() + (game.config.questionSubmitTimer * 1000);
   
   broadcastGameUpdate(gameId, game);
@@ -152,7 +154,7 @@ export function voteToSkip(gameId, playerId) {
     if (game.status === 'submitting_questions') {
       endQuestionSubmission(gameId);
     } else if (game.status === 'answering_turn') {
-      endAnsweringPhase(gameId);
+      endAnsweringPhase(gameId, game.currentTurn.number);
     }
   }
   
@@ -238,6 +240,8 @@ function startNextTurn(gameId) {
   game.currentTurn = {
     number: turnNumber,
     questionsInPlay,
+    timerStartedAt: Date.now(), // Add this
+    timerDuration: game.config.answerTimer, // Add this
     timerEndsAt: Date.now() + (game.config.answerTimer * 1000)
   };
   
@@ -256,7 +260,8 @@ function startNextTurn(gameId) {
   broadcastGameUpdate(gameId, game);
   
   // Auto-end after timer
-  setTimeout(() => endAnsweringPhase(gameId), game.config.answerTimer * 1000);
+  let turn = game.currentTurn.number;
+  setTimeout(() => endAnsweringPhase(gameId, turn), game.config.answerTimer * 1000);
 }
 
 export function submitAnswerProposal(gameId, playerId, questionId, choiceIndex) {
@@ -323,12 +328,12 @@ export function upvoteAnswerProposal(gameId, playerId, questionId, proposalId) {
   return { success: true };
 }
 
-function endAnsweringPhase(gameId) {
+function endAnsweringPhase(gameId, turn) {
   const game = getGame(gameId);
-  if (!game || game.status !== 'answering_turn') {
+  if (!game || game.status !== 'answering_turn' || game.currentTurn.number != turn) {
     return;
   }
-  
+
   // Select top voted answer for each team/question
   Object.keys(game.teams).forEach(teamId => {
     if (!game.answers[teamId]) {
@@ -372,50 +377,70 @@ function finishGame(gameId) {
   });
   
   // Process each question
-  Object.keys(game.teams).forEach(teamId => {
-    game.questions[teamId].forEach(question => {
-      const questionResult = {
-        question,
-        fromTeam: teamId,
-        teamAnswers: {},
-        anyoneAnswered: false
-      };
+Object.keys(game.teams).forEach(teamId => {
+  game.questions[teamId].forEach(question => {
+    const questionResult = {
+      question,
+      fromTeam: teamId,
+      teamAnswers: {},
+      correctCount: 0,
+      totalAnswering: 0
+    };
+    
+    // Check each team's answer
+    Object.keys(game.teams).forEach(answeringTeamId => {
+      if (answeringTeamId === teamId) return; // Don't answer own questions
       
-      // Check each team's answer
-      Object.keys(game.teams).forEach(answeringTeamId => {
-        if (answeringTeamId === teamId) return; // Don't answer own questions
+      questionResult.totalAnswering++;
+      const answer = game.answers[answeringTeamId]?.[question.id];
+      
+      if (answer !== null && answer !== undefined) {
+        const correct = answer === question.correctIndex;
         
-        const answer = game.answers[answeringTeamId]?.[question.id];
+        questionResult.teamAnswers[answeringTeamId] = {
+          choiceIndex: answer,
+          correct
+        };
         
-        if (answer !== null && answer !== undefined) {
-          const correct = answer === question.correctIndex;
-          
-          questionResult.teamAnswers[answeringTeamId] = {
-            choiceIndex: answer,
-            correct
-          };
-          
-          if (correct) {
-            questionResult.anyoneAnswered = true;
-            // Award points for correct answer
-            results.finalScores[answeringTeamId] += game.config.scoring.correctAnswer;
-          }
-        } else {
-          questionResult.teamAnswers[answeringTeamId] = {
-            choiceIndex: null,
-            correct: false
-          };
+        if (correct) {
+          questionResult.correctCount++;
+          // Award points for correct answer
+          results.finalScores[answeringTeamId] += game.config.scoring.correctAnswer;
         }
-      });
-      
-      // Award/deduct points to question-submitting team
-      if (questionResult.anyoneAnswered) {
-        results.finalScores[teamId] += game.config.scoring.questionAnswered;
       } else {
-        results.finalScores[teamId] += game.config.scoring.questionUnanswered;
+        questionResult.teamAnswers[answeringTeamId] = {
+          choiceIndex: null,
+          correct: false
+        };
       }
-      
-      results.questions.push(questionResult);
+    });
+    
+    // Calculate Gaussian distribution score for question-submitting team
+    const correctPercentage = questionResult.totalAnswering > 0 
+      ? questionResult.correctCount / questionResult.totalAnswering 
+      : 0;
+    
+    let questionPoints;
+    if (correctPercentage >= 0.33 && correctPercentage <= 0.66) {
+      // Sweet spot: 33% to 66% - award points
+      // Scale from questionAnswered at edges to max at 50%
+      const distanceFrom50 = Math.abs(correctPercentage - 0.5);
+      const maxDistance = 0.16; // Distance from 50% to edge (33% or 66%)
+      const scoreMultiplier = 1 - (distanceFrom50 / maxDistance) * 0.5; // 0.5 to 1.0
+      questionPoints = Math.round(game.config.scoring.questionAnswered * scoreMultiplier);
+    } else if (correctPercentage < 0.33) {
+      // Too easy - negative points
+      questionPoints = game.config.scoring.questionUnanswered;
+    } else {
+      // Too hard (> 66% got it wrong) - negative points
+      questionPoints = game.config.scoring.questionUnanswered;
+    }
+    
+    results.finalScores[teamId] += questionPoints;
+    questionResult.questionPoints = questionPoints;
+    questionResult.correctPercentage = correctPercentage;
+    
+    results.questions.push(questionResult);
     });
   });
   

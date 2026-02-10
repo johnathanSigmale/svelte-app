@@ -27,9 +27,9 @@ export function createGame(adminName) {
       skipTeamMajority: 0.75,
       maxChoices: 4,
       scoring: {
-        correctAnswer: 10,
-        questionAnswered: 5,
-        questionUnanswered: -3
+        correctAnswer: 10,           // Points for answering correctly
+        questionAnswered: 5,         // Max points for question in sweet spot (33%-66%)
+        questionUnanswered: -3       // Penalty for too easy (<33%) or too hard (>66%)
       }
     },
     
